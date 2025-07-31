@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Number Combination Generator</title>
+  <style>
+    /* Overall layout */
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 1.25rem; /* large base font for readability */
+      line-height: 1.6;
+      padding: 1.5rem;
+      max-width: 900px;
+      margin: auto;
+      background: #fefefe; /* lighter background for easy-on‑eyes */
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 1rem;
+    }
+
+    select {
+      font-size: 1.25rem;
+      padding: 0.5rem 0.75rem;
+      margin-top: 0.3rem;
+      width: 100%;
+      max-width: 220px;
+    }
+
+    button {
+      font-size: 1.5rem;
+      font-weight: bold;
+      padding: 0.6rem 1.3rem;
+      margin-top: 1.5rem;
+      cursor: pointer;
+      border-radius: 0.4rem;
+      border: 2px solid #333;
+      background-color: #f0f0f0;
+    }
+
+    button:hover:not(:disabled) {
+      background-color: #e0e0e0;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #output {
+      margin-top: 2rem;
+      overflow-x: auto;
+    }
+
+    /* Table styling for combinations */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 1.1rem;
+      text-align: center;
+    }
+
+    th, td {
+      border: 1px solid #bbb;
+      padding: 0.4rem 0.6rem;
+    }
+
+    tr:nth-child(even) {
+      background: #fafafa;
+    }
+
+    @media print {
+      body {
+        font-size: 12pt;
+        padding: 0;
+      }
+      #controls, #numberSelectors, #goButton, #printButton { display: none; }
+      table {
+        page-break-inside: avoid;
+        font-size: 11pt;
+      }
+      th, td {
+        border: 1px solid #000;
+        padding: 4pt;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Number Combination Generator</h1>
+
+  <!-- System dropdown -->
+  <div id="controls">
+    <label for="systemSelect">System:</label>
+    <select id="systemSelect">
+      <option value="">-- Select --</option>
+    </select>
+  </div>
+
+  <!-- Dynamic number selectors will be injected here -->
+  <div id="numberSelectors"></div>
+
+  <!-- Action buttons -->
+  <button id="goButton" disabled>GO</button>
+  <button id="printButton" disabled>Print</button>
+
+  <!-- Output area -->
+  <div id="output"></div>
+
+  <script>
+    // Populate System dropdown with 7‑35
+    const systemSelect = document.getElementById("systemSelect");
+    for (let i = 7; i <= 35; i++) {
+      const opt = document.createElement("option");
+      opt.value = i;
+      opt.textContent = i;
+      systemSelect.appendChild(opt);
+    }
+
+    const numberSelectorsDiv = document.getElementById("numberSelectors");
+    const goButton = document.getElementById("goButton");
+    const printButton = document.getElementById("printButton");
+    const outputDiv = document.getElementById("output");
+
+    let selectors = []; // store the <select> elements for numbers
+
+    // Helper: create a number selector at given index
+    function createNumberSelector(index) {
+      const label = document.createElement("label");
+      label.textContent = `Number ${index + 1}:`;
+      const select = document.createElement("select");
+      select.disabled = true; // initially disabled
+      select.innerHTML = '<option value="">-- Select --</option>';
+      label.appendChild(select);
+      numberSelectorsDiv.appendChild(label);
+      return select;
+    }
+
+    // Helper: populate options 1‑35 excluding any values in excluded Set
+    function populateOptions(select, excluded) {
+      select.innerHTML = '<option value="">-- Select --</option>';
+      for (let n = 1; n <= 35; n++) {
+        if (!excluded.has(n)) {
+          const opt = document.createElement("option");
+          opt.value = n;
+          opt.textContent = n;
+          select.appendChild(opt);
+        }
+      }
+    }
+
+    // Reset all dynamic elements
+    function resetSelectors() {
+      numberSelectorsDiv.innerHTML = "";
+      selectors = [];
+      goButton.disabled = true;
+      printButton.disabled = true;
+      outputDiv.innerHTML = "";
+    }
+
+    // Respond to System change
+    systemSelect.addEventListener("change", () => {
+      resetSelectors();
+      const count = parseInt(systemSelect.value, 10);
+      if (!count) return; // nothing selected
+
+      // Create required selectors
+      for (let i = 0; i < count; i++) {
+        const sel = createNumberSelector(i);
+        selectors.push(sel);
+        sel.addEventListener("change", () => onNumberChange(i));
+      }
+
+      // Activate first selector with full list
+      populateOptions(selectors[0], new Set());
+      selectors[0].disabled = false;
+    });
+
+    // Handle a number selection at index
+    function onNumberChange(index) {
+      // Build set of chosen numbers so far
+      const chosen = new Set();
+      for (let i = 0; i <= index; i++) {
+        const val = parseInt(selectors[i].value, 10);
+        if (val) chosen.add(val);
+      }
+
+      // Clear & disable subsequent selectors, repopulate
+      for (let j = index + 1; j < selectors.length; j++) {
+        populateOptions(selectors[j], chosen);
+        selectors[j].value = "";
+        selectors[j].disabled = true;
+      }
+
+      // Activate next selector if current choice made
+      if (index + 1 < selectors.length && selectors[index].value) {
+        selectors[index + 1].disabled = false;
+      }
+
+      // Enable GO if all selectors chosen
+      const allChosen = selectors.every((sel) => sel.value);
+      goButton.disabled = !allChosen;
+    }
+
+    // Combination utilities
+    function combinationCount(n, k) {
+      if (k > n) return 0;
+      let res = 1;
+      for (let i = 1; i <= k; i++) {
+        res = (res * (n - i + 1)) / i;
+      }
+      return res;
+    }
+
+    // Recursive generator of combinations
+    function combinations(arr, k) {
+      const res = [];
+      const combo = [];
+      function backtrack(start, depth) {
+        if (depth === k) {
+          res.push([...combo]);
+          return;
+        }
+        for (let i = start; i <= arr.length - (k - depth); i++) {
+          combo[depth] = arr[i];
+          backtrack(i + 1, depth + 1);
+        }
+      }
+      backtrack(0, 0);
+      return res;
+    }
+
+    // Handle GO click
+    goButton.addEventListener("click", () => {
+      const numbers = selectors
+        .map((sel) => parseInt(sel.value, 10))
+        .sort((a, b) => a - b);
+
+      const totalComb = combinationCount(numbers.length, 7);
+
+      // Protect user (and browser) from huge outputs
+      if (totalComb > 100000) {
+        outputDiv.innerHTML = `Too many combinations (${totalComb}). Please select fewer numbers.`;
+        printButton.disabled = true;
+        return;
+      }
+
+      const combos = combinations(numbers, 7);
+
+      // Build table
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const headRow = document.createElement('tr');
+      for (let i = 1; i <= 7; i++) {
+        const th = document.createElement('th');
+        th.textContent = `#${i}`;
+        headRow.appendChild(th);
+      }
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      combos.forEach(c => {
+        const tr = document.createElement('tr');
+        c.forEach(num => {
+          const td = document.createElement('td');
+          td.textContent = num;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+
+      // Header for total combinations
+      const countHeader = document.createElement('h2');
+      countHeader.textContent = `Total combinations: ${combos.length}`;
+      countHeader.style.marginBottom = '0.8rem';
+
+      outputDiv.innerHTML = ""; // clear previous
+      outputDiv.appendChild(countHeader);
+      outputDiv.appendChild(table);
+
+      printButton.disabled = false;
+    });
+
+    // Print functionality
+    printButton.addEventListener('click', () => {
+      window.print();
+    });
+  </script>
+</body>
+</html>
