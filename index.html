@@ -29,6 +29,20 @@
       margin-top: 1rem;
     }
 
+    .number-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.5rem;
+      align-items: flex-end;
+      margin-top: 1rem;
+    }
+
+    .number-row label {
+      display: flex;
+      flex-direction: column;
+      margin-top: 0;
+    }
+
     select {
       font-size: 1.25rem;
       padding: 0.5rem 0.75rem;
@@ -132,18 +146,38 @@
     const printButton = document.getElementById("printButton");
     const outputDiv = document.getElementById("output");
 
-    let selectors = []; // store the <select> elements for numbers
+    let entries = []; // store number/status pairs
 
     // Helper: create a number selector at given index
-    function createNumberSelector(index) {
-      const label = document.createElement("label");
-      label.textContent = `Number ${index + 1}:`;
-      const select = document.createElement("select");
-      select.disabled = true; // initially disabled
-      select.innerHTML = '<option value="">-- Select --</option>';
-      label.appendChild(select);
-      numberSelectorsDiv.appendChild(label);
-      return select;
+    function createNumberRow(index) {
+      const row = document.createElement("div");
+      row.className = "number-row";
+
+      const numberLabel = document.createElement("label");
+      numberLabel.textContent = `Number ${index + 1}:`;
+      const numberSelect = document.createElement("select");
+      numberSelect.disabled = true;
+      numberSelect.innerHTML = '<option value="">-- Select --</option>';
+      numberLabel.appendChild(numberSelect);
+
+      const statusLabel = document.createElement("label");
+      statusLabel.textContent = "Status:";
+      const statusSelect = document.createElement("select");
+      statusSelect.disabled = true;
+      const variableOpt = document.createElement("option");
+      variableOpt.value = "variable";
+      variableOpt.textContent = "Variable";
+      const fixedOpt = document.createElement("option");
+      fixedOpt.value = "fixed";
+      fixedOpt.textContent = "Fixed";
+      statusSelect.append(variableOpt, fixedOpt);
+      statusSelect.value = "variable";
+      statusLabel.appendChild(statusSelect);
+
+      row.append(numberLabel, statusLabel);
+      numberSelectorsDiv.appendChild(row);
+
+      return { numberSelect, statusSelect };
     }
 
     // Helper: populate options 1‑35 excluding any values in excluded Set
@@ -162,7 +196,7 @@
     // Reset all dynamic elements
     function resetSelectors() {
       numberSelectorsDiv.innerHTML = "";
-      selectors = [];
+      entries = [];
       goButton.disabled = true;
       printButton.disabled = true;
       outputDiv.innerHTML = "";
@@ -176,40 +210,78 @@
 
       // Create required selectors
       for (let i = 0; i < count; i++) {
-        const sel = createNumberSelector(i);
-        selectors.push(sel);
-        sel.addEventListener("change", () => onNumberChange(i));
+        const entry = createNumberRow(i);
+        entries.push(entry);
+        entry.numberSelect.addEventListener("change", () => onNumberChange(i));
+        entry.statusSelect.addEventListener("change", onStatusChange);
       }
 
       // Activate first selector with full list
-      populateOptions(selectors[0], new Set());
-      selectors[0].disabled = false;
+      populateOptions(entries[0].numberSelect, new Set());
+      entries[0].numberSelect.disabled = false;
+      entries[0].statusSelect.disabled = false;
+      updateGoButtonState();
     });
 
     // Handle a number selection at index
     function onNumberChange(index) {
+      outputDiv.innerHTML = "";
+      printButton.disabled = true;
+
       // Build set of chosen numbers so far
       const chosen = new Set();
       for (let i = 0; i <= index; i++) {
-        const val = parseInt(selectors[i].value, 10);
+        const val = parseInt(entries[i].numberSelect.value, 10);
         if (val) chosen.add(val);
       }
 
       // Clear & disable subsequent selectors, repopulate
-      for (let j = index + 1; j < selectors.length; j++) {
-        populateOptions(selectors[j], chosen);
-        selectors[j].value = "";
-        selectors[j].disabled = true;
+      for (let j = index + 1; j < entries.length; j++) {
+        const { numberSelect, statusSelect } = entries[j];
+        populateOptions(numberSelect, chosen);
+        numberSelect.value = "";
+        numberSelect.disabled = true;
+        statusSelect.value = "variable";
+        statusSelect.disabled = true;
       }
 
       // Activate next selector if current choice made
-      if (index + 1 < selectors.length && selectors[index].value) {
-        selectors[index + 1].disabled = false;
+      if (index + 1 < entries.length && entries[index].numberSelect.value) {
+        entries[index + 1].numberSelect.disabled = false;
+        entries[index + 1].statusSelect.disabled = false;
+        populateOptions(entries[index + 1].numberSelect, chosen);
       }
 
-      // Enable GO if all selectors chosen
-      const allChosen = selectors.every((sel) => sel.value);
-      goButton.disabled = !allChosen;
+      updateGoButtonState();
+    }
+
+    function onStatusChange() {
+      outputDiv.innerHTML = "";
+      printButton.disabled = true;
+      updateGoButtonState();
+    }
+
+    function updateGoButtonState() {
+      if (entries.length === 0) {
+        goButton.disabled = true;
+        return;
+      }
+
+      const allChosen = entries.every((entry) => entry.numberSelect.value);
+      if (!allChosen) {
+        goButton.disabled = true;
+        return;
+      }
+
+      const fixedCount = entries.filter((entry) => entry.statusSelect.value === "fixed").length;
+      const variableCount = entries.length - fixedCount;
+      const neededFromVariable = 7 - fixedCount;
+      const canGenerate = neededFromVariable >= 0 && neededFromVariable <= variableCount;
+      goButton.disabled = !canGenerate;
+
+      if (goButton.disabled) {
+        printButton.disabled = true;
+      }
     }
 
     // Combination utilities
@@ -242,11 +314,31 @@
 
     // Handle GO click
     goButton.addEventListener("click", () => {
-      const numbers = selectors
-        .map((sel) => parseInt(sel.value, 10))
+      const fixedNumbers = entries
+        .filter((entry) => entry.statusSelect.value === "fixed")
+        .map((entry) => parseInt(entry.numberSelect.value, 10))
         .sort((a, b) => a - b);
 
-      const totalComb = combinationCount(numbers.length, 7);
+      const variableNumbers = entries
+        .filter((entry) => entry.statusSelect.value === "variable")
+        .map((entry) => parseInt(entry.numberSelect.value, 10))
+        .sort((a, b) => a - b);
+
+      const neededFromVariable = 7 - fixedNumbers.length;
+
+      if (neededFromVariable < 0) {
+        outputDiv.innerHTML = "Too many fixed numbers. Please mark at most 7 numbers as fixed.";
+        printButton.disabled = true;
+        return;
+      }
+
+      if (variableNumbers.length < neededFromVariable) {
+        outputDiv.innerHTML = "Not enough variable numbers to complete a 7-number combination.";
+        printButton.disabled = true;
+        return;
+      }
+
+      const totalComb = combinationCount(variableNumbers.length, neededFromVariable);
 
       // Protect user (and browser) from huge outputs
       if (totalComb > 100000) {
@@ -255,7 +347,13 @@
         return;
       }
 
-      const combos = combinations(numbers, 7);
+      let combos = [];
+      if (neededFromVariable === 0) {
+        combos = [fixedNumbers];
+      } else {
+        const variableCombos = combinations(variableNumbers, neededFromVariable);
+        combos = variableCombos.map((combo) => [...fixedNumbers, ...combo].sort((a, b) => a - b));
+      }
 
       // Build table
       const table = document.createElement('table');
