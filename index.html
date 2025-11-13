@@ -113,10 +113,15 @@
 <body>
   <h1>Number Combination Generator</h1>
 
-  <!-- System dropdown -->
   <div id="controls">
+    <label for="drawSelect">Numbers in one draw:</label>
+    <select id="drawSelect">
+      <option value="">-- Select --</option>
+    </select>
+
+    <!-- System dropdown -->
     <label for="systemSelect">System:</label>
-    <select id="systemSelect">
+    <select id="systemSelect" disabled>
       <option value="">-- Select --</option>
     </select>
   </div>
@@ -132,13 +137,25 @@
   <div id="output"></div>
 
   <script>
-    // Populate System dropdown with 7‑35
+    const drawSelect = document.getElementById("drawSelect");
     const systemSelect = document.getElementById("systemSelect");
-    for (let i = 7; i <= 35; i++) {
+
+    // Populate draw size dropdown with 2‑35
+    for (let i = 2; i <= 35; i++) {
       const opt = document.createElement("option");
       opt.value = i;
       opt.textContent = i;
-      systemSelect.appendChild(opt);
+      drawSelect.appendChild(opt);
+    }
+
+    function populateSystemOptions(start) {
+      systemSelect.innerHTML = '<option value="">-- Select --</option>';
+      for (let i = start; i <= 35; i++) {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = i;
+        systemSelect.appendChild(opt);
+      }
     }
 
     const numberSelectorsDiv = document.getElementById("numberSelectors");
@@ -147,6 +164,7 @@
     const outputDiv = document.getElementById("output");
 
     let entries = []; // store number/status pairs
+    let drawSize = null;
 
     // Helper: create a number selector at given index
     function createNumberRow(index) {
@@ -202,11 +220,33 @@
       outputDiv.innerHTML = "";
     }
 
+    drawSelect.addEventListener("change", () => {
+      resetSelectors();
+      const selected = parseInt(drawSelect.value, 10);
+      drawSize = Number.isNaN(selected) ? null : selected;
+
+      if (!drawSize) {
+        systemSelect.disabled = true;
+        systemSelect.innerHTML = '<option value="">-- Select --</option>';
+        systemSelect.value = "";
+        return;
+      }
+
+      populateSystemOptions(drawSize);
+      systemSelect.disabled = false;
+      systemSelect.value = "";
+    });
+
     // Respond to System change
     systemSelect.addEventListener("change", () => {
       resetSelectors();
       const count = parseInt(systemSelect.value, 10);
-      if (!count) return; // nothing selected
+      if (!drawSize || !count) return; // ensure prerequisites
+
+      if (count < drawSize) {
+        outputDiv.textContent = "System must be greater than or equal to the numbers in one draw.";
+        return;
+      }
 
       // Create required selectors
       for (let i = 0; i < count; i++) {
@@ -262,7 +302,7 @@
     }
 
     function updateGoButtonState() {
-      if (entries.length === 0) {
+      if (!drawSize || entries.length === 0) {
         goButton.disabled = true;
         return;
       }
@@ -275,7 +315,7 @@
 
       const fixedCount = entries.filter((entry) => entry.statusSelect.value === "fixed").length;
       const variableCount = entries.length - fixedCount;
-      const neededFromVariable = 7 - fixedCount;
+      const neededFromVariable = drawSize - fixedCount;
       const canGenerate = neededFromVariable >= 0 && neededFromVariable <= variableCount;
       goButton.disabled = !canGenerate;
 
@@ -314,6 +354,11 @@
 
     // Handle GO click
     goButton.addEventListener("click", () => {
+      if (!drawSize) {
+        outputDiv.textContent = "Please select the numbers in one draw.";
+        return;
+      }
+
       const fixedNumbers = entries
         .filter((entry) => entry.statusSelect.value === "fixed")
         .map((entry) => parseInt(entry.numberSelect.value, 10))
@@ -324,16 +369,16 @@
         .map((entry) => parseInt(entry.numberSelect.value, 10))
         .sort((a, b) => a - b);
 
-      const neededFromVariable = 7 - fixedNumbers.length;
+      const neededFromVariable = drawSize - fixedNumbers.length;
 
       if (neededFromVariable < 0) {
-        outputDiv.innerHTML = "Too many fixed numbers. Please mark at most 7 numbers as fixed.";
+        outputDiv.innerHTML = `Too many fixed numbers. Please mark at most ${drawSize} numbers as fixed.`;
         printButton.disabled = true;
         return;
       }
 
       if (variableNumbers.length < neededFromVariable) {
-        outputDiv.innerHTML = "Not enough variable numbers to complete a 7-number combination.";
+        outputDiv.innerHTML = `Not enough variable numbers to complete a ${drawSize}-number combination.`;
         printButton.disabled = true;
         return;
       }
@@ -359,7 +404,7 @@
       const table = document.createElement('table');
       const thead = document.createElement('thead');
       const headRow = document.createElement('tr');
-      for (let i = 1; i <= 7; i++) {
+      for (let i = 1; i <= drawSize; i++) {
         const th = document.createElement('th');
         th.textContent = `#${i}`;
         headRow.appendChild(th);
@@ -370,11 +415,11 @@
       const tbody = document.createElement('tbody');
       combos.forEach(c => {
         const tr = document.createElement('tr');
-        c.forEach(num => {
+        for (let i = 0; i < drawSize; i++) {
           const td = document.createElement('td');
-          td.textContent = num;
+          td.textContent = c[i] ?? "";
           tr.appendChild(td);
-        });
+        }
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
